@@ -1,4 +1,6 @@
 import requests
+import discord
+from discord.ext import commands
 
 def respond():
 
@@ -18,3 +20,14 @@ def respond():
     ret = f"Title: {title} \n\nDescription: {description} \n\nEpisodes: {episodes} \n\nGenres: {all_genres} \n\nStudio: {studios} \n\nDuration: {duration} \n\nLink: {link} \n\n{image} "
 
     return(ret)
+
+
+class Anime(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
+
+    @ commands.command()
+    async def anime(self, ctx):
+        """Recommends random anime"""
+        recommendation = respond()
+        await ctx.send(recommendation)

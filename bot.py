@@ -31,7 +31,8 @@ ytdl_format_options = {
     'quiet': True,
     'no_warnings': True,
     'default_search': 'auto',
-    'source_address': '0.0.0.0',  # bind to ipv4 since ipv6 addresses cause issues sometimes
+    # bind to ipv4 since ipv6 addresses cause issues sometimes
+    'source_address': '0.0.0.0',
 }
 
 ffmpeg_options = {
@@ -77,31 +78,13 @@ class Music(commands.Cog):
         await channel.connect()
 
     @commands.command()
-    async def play(self, ctx, *, query):
-        """Plays a file from the local filesystem"""
-
-        source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(query))
-        ctx.voice_client.play(source, after=lambda e: print(f'Player error: {e}') if e else None)
-
-        await ctx.send(f'Now playing: {query}')
-
-    @commands.command()
-    async def yt(self, ctx, *, url):
-        """Plays from a url (almost anything youtube_dl supports)"""
-
-        async with ctx.typing():
-            player = await YTDLSource.from_url(url, loop=self.bot.loop)
-            ctx.voice_client.play(player, after=lambda e: print(f'Player error: {e}') if e else None)
-
-        await ctx.send(f'Now playing: {player.title}')
-
-    @commands.command()
-    async def stream(self, ctx, *, url):
+    async def play(self, ctx, *, url):
         """Streams from a url (same as yt, but doesn't predownload)"""
 
         async with ctx.typing():
             player = await YTDLSource.from_url(url, loop=self.bot.loop, stream=True)
-            ctx.voice_client.play(player, after=lambda e: print(f'Player error: {e}') if e else None)
+            ctx.voice_client.play(player, after=lambda e: print(
+                f'Player error: {e}') if e else None)
 
         await ctx.send(f'Now playing: {player.title}')
 
@@ -122,50 +105,57 @@ class Music(commands.Cog):
         await ctx.voice_client.disconnect()
 
     @play.before_invoke
-    @yt.before_invoke
-    @stream.before_invoke
     async def ensure_voice(self, ctx):
         if ctx.voice_client is None:
             if ctx.author.voice:
                 await ctx.author.voice.channel.connect()
             else:
                 await ctx.send("You are not connected to a voice channel.")
-                raise commands.CommandError("Author not connected to a voice channel.")
+                raise commands.CommandError(
+                    "Author not connected to a voice channel.")
         elif ctx.voice_client.is_playing():
             ctx.voice_client.stop()
+
 
 class Anime(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
     @commands.command()
-    async def anime(self,ctx):
+    async def anime(self, ctx):
         """Recommends random anime"""
         recommendation = anime.respond()
         await ctx.send(recommendation)
+
 
 class Admin(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
     @commands.command()
-    async def delete(self,ctx):
+    async def delete(self, ctx):
         """Delete text in text channel"""
-        
+
         await ctx.channel.send('Type \'yes\' if you are sure')
 
-        def check(m: discord.Message):
-            return m.author.id == ctx.author.id and m.channel.id == ctx.channel.id 
-
         try:
-            await bot.wait_for('message', check = check, timeout = 60.0)
+            res = await bot.wait_for(
+                "message",
+                check=lambda x: x.channel.id == ctx.channel.id
+                and ctx.author.id == x.author.id,
+                timeout=5.0,
+            )
+
+            if res.content.lower() == "yes":
+                deleted = await ctx.channel.purge(limit=10)
+                await ctx.channel.send(f'Deleted {len(deleted)} message(s)')
+                return
+
         except asyncio.TimeoutError:
-            await ctx.channel.send('Request cancelled')
-            return
+            await ctx.channel.send('Time out! Request cancelled')
         else:
-            deleted = await ctx.channel.purge(limit=10)
-            await ctx.channel.send(f'Deleted {len(deleted)} message(s)')
-            return
+            await ctx.channel.send('Request cancelled')
+
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -182,13 +172,13 @@ async def on_ready():
     print(f'Logged in as {bot.user} (ID: {bot.user.id})')
     print('------')
 
-@bot.event 
+
+@bot.event
 async def on_member_join(member):
     guild = member.guild
     if guild.system_channel is not None:
         to_send = f'Welcome {member.mention} to {guild.name}!'
         await guild.system_channel.send(to_send)
-
 
 
 async def main():

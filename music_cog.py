@@ -1,8 +1,7 @@
 import discord
 import youtube_dl
-
 from discord.ext import commands
-
+import asyncio
 
 
 # Suppress noise about console usage from errors
@@ -56,59 +55,97 @@ class YTDLSource(discord.PCMVolumeTransformer):
 class Music(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.queue = []
+        self.queue = {}
+
+    def check_queue(self, ctx, id):
+        if self.queue[id] != []:
+            source = self.queue[id].pop(0)[0]
+            ctx.voice_client.play(
+                source, after=lambda x=0: self.check_queue(ctx, ctx.message.guild.id))
 
     @commands.command()
     async def play(self, ctx, *, url):
-
-        try:
-
+        guild_id = ctx.message.guild.id
+        voice = ctx.guild.voice_client
+        source = await YTDLSource.from_url(url, loop=self.bot.loop, stream=True)
+        sourceAndSourceTitle = [source, source.title]
+        if voice.is_playing():
+            guild_id = ctx.message.guild.id
+            if guild_id in self.queue:
+                self.queue[guild_id].append(sourceAndSourceTitle)
+            else:
+                self.queue[guild_id] = [sourceAndSourceTitle]
+        else:
             async with ctx.typing():
-                player = await YTDLSource.from_url(url, loop=self.bot.loop, stream=True)
+                ctx.voice_client.play(
+                    source, after=lambda x=None: self.check_queue(ctx, ctx.message.guild.id))
 
-                if len(self.queue) == 0:
+        await ctx.send(f'Now playing: {source.title}')
 
-                    ctx.voice_client.play(player, after=lambda e: print(
-                        'Player error: %s' % e) if e else None)
-                    await ctx.send(f'**Now Playing:** {player.title}')
+    @ commands.command()
+    async def queue(self, ctx, url):
+        source = await YTDLSource.from_url(url, loop=self.bot.loop, stream=True)
+        guild_id = ctx.message.guild.id
+        sourceAndSourceTitle = [source, source.title]
+        if guild_id in self.queue:
+            self.queue[guild_id].append(sourceAndSourceTitle)
+        else:
+            self.queue[guild_id] = [sourceAndSourceTitle]
 
-                else:
+        await ctx.send(f'Added to queue : {source.title}')
 
-                    self.queue.append(player)
-                    await ctx.send(f'**Added to queue:** {player.title}')
+    @ commands.command()
+    async def showqueue(self, ctx):
+        guild_id = ctx.message.guild.id
+        if not self.queue[guild_id]:
+            await ctx.send('No songs in queue')
+            return
+        queueTitles = [y for x, y in self.queue[guild_id]]
+        queueList = 'Song Queue ⬇\n -------\n'
+        for title in queueTitles:
+            queueList += f'-{title}\n'
+        await ctx.send(f'```{queueList}```')
 
-        except:
+    @ commands.command()
+    async def clearqueue(self, ctx):
 
-            await ctx.send("Somenthing went wrong - please try again later!")
+        guild_id = ctx.message.guild.id
+        self.queue[guild_id] = []
+        await ctx.send(f'Queue Cleared')
 
-    def start_playing(self, voice_client, player):
+    @ commands.command()
+    async def skip(self, ctx):
+        """Skip the song."""
+        vc = ctx.voice_client
 
-        self.queue[0] = player
+        if not vc or not vc.is_connected():
+            return await ctx.send('I am not currently playing anything!', delete_after=20)
 
-        voice_client.play(self.queue[i], after=lambda e: print(
-            'Player error: %s' % e) if e else None)
-
-    def check_queue(self, voice_client, player):
-        if self.queue != []:
-            voice_client
+        vc.stop()
+        await ctx.send(f'**`{ctx.author}`**: Skipped the song!')
 
     @ commands.command()
     async def pause(self, ctx):
         """Pause"""
-
-        await ctx.voice_client.pause()
+        ctx.voice_client.pause()
+        await ctx.send(f'**`{ctx.author}`**: Paused the song!')
 
     @ commands.command()
     async def resume(self, ctx):
         """Resume"""
-
-        await ctx.voice_client.resume()
+        ctx.voice_client.resume()
+        await ctx.send(f'**`{ctx.author}`**: Resumed the song!')
 
     @ commands.command()
     async def stop(self, ctx):
         """Stops and disconnects the bot from voice"""
-
         await ctx.voice_client.disconnect()
+
+    @ commands.command()
+    async def commands(self, ctx):
+        """Shows list of commands"""
+        commands_string = '!play - Play song\n!queue - Queue Song\n!showqueue - Show list of songs queued\n!clearqueue - Clear all songs in the queue\n!skip - Skip current song\n!pause - Pause current song\n!resume - Resume current song\n!stop - Stop all songs and disconnect bot from voice channel'
+        await ctx.send(f'```{commands_string}```')
 
     @ play.before_invoke
     async def ensure_voice(self, ctx):

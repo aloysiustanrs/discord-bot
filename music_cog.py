@@ -141,11 +141,7 @@ class Music(commands.Cog):
         """Stops and disconnects the bot from voice"""
         await ctx.voice_client.disconnect()
 
-    @ commands.command()
-    async def commands(self, ctx):
-        """Shows list of commands"""
-        commands_string = '!play - Play song\n!queue - Queue Song\n!showqueue - Show list of songs queued\n!clearqueue - Clear all songs in the queue\n!skip - Skip current song\n!pause - Pause current song\n!resume - Resume current song\n!stop - Stop all songs and disconnect bot from voice channel'
-        await ctx.send(f'```{commands_string}```')
+
 
     @ play.before_invoke
     async def ensure_voice(self, ctx):
